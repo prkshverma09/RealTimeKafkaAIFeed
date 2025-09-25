@@ -1,0 +1,109 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.2
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/data
+      - zookeeper_log:/datalog
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.2
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  ksqldb-server:
+    image: confluentinc/ksqldb-server:0.28.2
+    container_name: ksqldb-server
+    depends_on:
+      - kafka
+    ports:
+      - "8088:8088"
+    environment:
+      KSQL_LISTENERS: http://0.0.0.0:8088
+      KSQL_BOOTSTRAP_SERVERS: kafka:9092
+      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
+
+  ksqldb-cli:
+    image: confluentinc/ksqldb-cli:0.28.2
+    container_name: ksqldb-cli
+    depends_on:
+      - ksqldb-server
+    entrypoint: /bin/sh
+    tty: true
+
+  chromadb:
+    image: chromadb/chroma:0.4.24
+    container_name: chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chromadb_data:/chroma/.chroma/index
+
+  topic-creator:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile
+    container_name: topic-creator
+    depends_on:
+      - kafka
+
+  news-producer:
+    build:
+      context: ./producers
+      dockerfile: Dockerfile
+    container_name: news-producer
+    depends_on:
+      - kafka
+      - topic-creator
+    env_file:
+      - .env
+
+  vectorizer:
+    build:
+      context: ./vectorizer
+      dockerfile: Dockerfile
+    container_name: vectorizer
+    depends_on:
+      - kafka
+      - chromadb
+      - topic-creator
+    restart: on-failure
+
+  qna-app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: qna-app
+    ports:
+      - "8501:8501"
+    depends_on:
+      - chromadb
+      - vectorizer
+    env_file:
+      - .env
+    restart: on-failure
+
+volumes:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
+  chromadb_data:
