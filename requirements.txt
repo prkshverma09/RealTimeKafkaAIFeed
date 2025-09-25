@@ -1,0 +1,7 @@
+kafka-python
+sentence-transformers
+streamlit
+openai
+python-dotenv
+newsapi-python
+chromadb
