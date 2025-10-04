@@ -88,13 +88,13 @@ services:
       - topic-creator
     restart: on-failure
 
-  qna-app:
+  frontend:
     build:
-      context: ./app
+      context: ./frontend
       dockerfile: Dockerfile
-    container_name: qna-app
+    container_name: frontend
     ports:
-      - "8501:8501"
+      - "3000:3000"
     depends_on:
       - chromadb
       - vectorizer
